@@ -49,7 +49,7 @@ app.post('/webhooks/topic/:topic', async (req, res) => {
                 }, 5000);
             }
         res.on("close", () => {
-            clearInterval(interval);
+            // clearInterval(interval);
             res.end();
             console.log("Client disconnected");
         });
@@ -59,14 +59,42 @@ app.post('/webhooks/topic/:topic', async (req, res) => {
     // issue credential topic if state is done post request to bank server to register the employee
     else if(req.params.topic === 'issue_credential_v2_0' && req.body.state === 'done'){
         console.log("Issue Credential Response: ", req.body);
-        let issueCredentialResponse = req.body;
 
-        // Send a POST request to the bank server to register the employee
-        try {
-            const response = await axios.post(`${bankApiUrl}/auth/register`, issueCredentialResponse);
-            console.log("Employee registered successfully:", response.data);
-        } catch (error) {
-            console.error("Error registering employee:", error);
+        // console.log("Issue Credential Response.by_format: ", issueCredentialResponse.by_format);
+        const issueCredentialResponse = req.body;
+
+          // Extract attributes from the credential
+        const attributes = req.body?.by_format?.cred_issue?.indy?.values;
+        console.log("attributes: ", attributes);
+
+          // Check for a attribute credential_type
+        const hasEmployeeId = attributes?.credential_type?.raw === 'employeeId';
+        console.log("hasEmployeeId: ", hasEmployeeId);
+
+        const hasPermission = attributes?.credential_type?.raw === 'basePermission' || attributes?.credential_type?.raw === 'delegatedPermission';
+        console.log("hasPermission: ", hasPermission);
+
+
+        if (hasEmployeeId) {
+            // Send a POST request to the bank server to register the employee
+            try {
+                const response = await axios.post(`${bankApiUrl}/auth/register`, issueCredentialResponse);
+                console.log("Employee registered successfully:", response.data);
+            } catch (error) {
+                console.error("Error registering employee:", error);
+            }
+        } else if (hasPermission) {
+            console.log("hasPermission is true");
+            try {
+                const response = await axios.post(`${bankApiUrl}/auth/permissions/new`, issueCredentialResponse);
+                console.log("Permission added successfully:", response.data);
+            }
+            catch (error) {
+                console.error("Error adding permission:", error);
+            }
+        }
+        else{
+            console.log("credential is not employee id or permission credential");
         }
     }
 
@@ -99,6 +127,7 @@ app.post('/webhooks/topic/:topic', async (req, res) => {
     // Respond with 200 OK to acknowledge receipt of the webhook event
     res.status(200).send('Webhook event received');
 });
+///--End even webhook---//
 
 // present proof from banks
 app.post("/webhooks/present-proof", async (req, res) => {
