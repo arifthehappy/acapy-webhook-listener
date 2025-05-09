@@ -14,6 +14,8 @@ app.use(cors()); // Enable CORS for all routes
 
 let messages = [];
 
+const proofStatus = {}; // Add this at the top of your file
+
 //get root endpoint to check if the listener is running
 app.get('/', (req, res) => {
     res.send('Webhook listener running');
@@ -101,33 +103,50 @@ app.post('/webhooks/topic/:topic', async (req, res) => {
     // present proof topic if state is verified
     else if(req.params.topic === 'present_proof_v2_0' && req.body.state === 'done'){
         console.log("Present Proof Response: ", req.body);
-        let presentProofResponse = req.body;        
-        app.get("/events/proof-status/:connection_id", (req, res) => {
-            if(req.params.connection_id === presentProofResponse.connection_id){
-                // res.setHeader("Content-Type", "text/event-stream");
-                // res.setHeader("Cache-Control", "no-cache");
-                // res.setHeader("Connection", "keep-alive");
+        // let presentProofResponse = req.body;        
+        // proofStatus[presentProofResponse.thread_id] = presentProofResponse;
 
-                console.log("proof event hit for connection id: ", req.params.connection_id);
-            
-                    console.log("Proof verified for connection: ", req.params.connection_id);
-                    res.status(200).json(presentProofResponse);
-          
-             
+        const { connection_id, thread_id } = req.body;
+        if (!proofStatus[connection_id]) proofStatus[connection_id] = {};
+        proofStatus[connection_id][thread_id] = req.body;
+        // app.get("/events/proof-status/:connection_id", (req, res) => {
+        //     if(req.params.connection_id === presentProofResponse.connection_id){
+        //         console.log("proof event hit for connection id: ", req.params.connection_id);
+        //             console.log("Proof verified for connection: ", req.params.connection_id);
+        //             console.log("Present Proof Response: ", presentProofResponse);
+        //             res.status(200).json(presentProofResponse);    
+        //     }
+        //     // res.on("close", () => {
                 
-            }
-            // res.on("close", () => {
-                
-            //     res.end();
-            //     console.log("Client disconnected");
-            // }); 
-        });   
+        //     //     res.end();
+        //     //     console.log("Client disconnected");
+        //     // }); 
+        // });
     }
 
     // Respond with 200 OK to acknowledge receipt of the webhook event
     res.status(200).send('Webhook event received');
 });
 ///--End even webhook---//
+
+// Get proof status for a specific connection and thread
+app.get('/events/proof-status/:connection_id/:thread_id', (req, res) => {
+    console.log("proof status event hit for connection id: ", req.params.connection_id);
+    const { connection_id, thread_id } = req.params;
+    const status = proofStatus[connection_id]?.[thread_id];
+    if (status && status.verified === "true") {
+        res.status(200).json({ verified: true, ...status });
+        // Optionally, you can delete the status after sending it
+        delete proofStatus[connection_id][thread_id];
+    } else {
+        res.status(200).json({ verified: false });
+    }
+});
+
+// app.post("/events/clear-proof-status/:connection_id", (req, res) => {
+//     delete proofStatus[req.params.connection_id];
+//     res.json({ success: true });
+// });
 
 // present proof from banks
 app.post("/webhooks/present-proof", async (req, res) => {
